@@ -14,7 +14,7 @@ How to run everything in Docker: `docker/README.md`.
 |---|---|---|
 | 1. SLAM: does the map represent the environment well? | 15% | **Done**: `maps/my_map` built with teleop, complete and clean |
 | 2. PRM on the SLAM map: finds a solution, is PRM, keeps a safe distance | 25% | **Done and tested** on `my_map`, in simulation. Report figures/table to do |
-| 3. Localisation and path following: reaches goals without collisions | 25% | CW1 path follower works (3 goals reached with a static map to odom TF). Localisation not started |
+| 3. Localisation and path following: reaches goals without collisions | 25% | **Done and tested**: 6/6 goals reached, no collisions. Screenshot to do |
 | 4. Integration and code quality: runs from one launch file, documented | 15% | Not started |
 | Report (max 4 pages PDF) | 20% | Not started. Material collected below |
 
@@ -22,8 +22,8 @@ How to run everything in Docker: `docker/README.md`.
 
 - [x] Saved map `maps/my_map.yaml` + `.pgm`, built with teleop
 - [x] PRM planning on that map (Part 2)
-- [ ] Localisation in the saved map: AMCL or slam_toolbox localisation mode (Part 3)
-- [ ] Path following to the goal without collisions (Part 3)
+- [x] Localisation in the saved map: AMCL (Part 3)
+- [x] Path following to the goal without collisions (Part 3)
 - [ ] One launch file: localisation + planner + path follower + RViz (Part 4)
 - [ ] Demo: robot reaches at least 3 goals (patient rooms) one after the other (Part 4)
 - [ ] Video of the robot working (or live demo)
@@ -147,10 +147,79 @@ robot's actual position.
 
 ## Part 3: Localisation and path following
 
-- [ ] Localisation: AMCL (nav2_amcl) or slam_toolbox in localisation mode, on the saved map
-- [ ] Replace the static `map` to `odom` transform (`static_map_odom:=false`)
-- [ ] Path follower: CW1 `path_follower.py` is copied in; check it works on this robot, tune speeds/tolerances
-- [ ] Collision-free check over several runs
+**How to run**
+```bash
+ros2 launch b31ys_kalman navigation.launch.py sim:=true results_csv:=/output/prm_results.csv
+```
+In RViz: if the robot did not start at the map origin, set its pose with
+**2D Pose Estimate**; then click **2D Goal Pose**. The PRM plans from the
+localised pose and the follower drives there.
+
+**Files**
+
+| File | Purpose |
+|---|---|
+| `launch/localization.launch.py` | map_server (saved map) + AMCL + lifecycle manager |
+| `config/amcl_params.yaml` | AMCL parameters |
+| `launch/navigation.launch.py` | Sim (optional) + localisation + PRM planner + path follower + RViz |
+| `config/navigation.rviz` | prm.rviz + AMCL pose, 2D Pose Estimate tool |
+| `b31ys_kalman/path_follower.py` | CW1 follower, with CW2 additions |
+
+**Localisation: AMCL (nav2_amcl).** Particle filter on the saved map, using
+the lidar and the robot's odometry (`odom` to `base_link` from the ROSbot's
+EKF); publishes `map` to `odom`. Replaces the static transform used in Part 2.
+
+AMCL parameters changed from the Nav2 defaults:
+
+| Parameter | Default | Ours | Why |
+|---|---|---|---|
+| `base_frame_id` | `base_footprint` | `base_link` | The ROSbot has no `base_footprint` |
+| `scan_topic` | `scan` | `/scan_filtered` | Scan without the robot's own body |
+| `set_initial_pose` + `initial_pose` | false | true, (0, 0, 0) | The map was started at the spawn point, so the robot starts at the map origin: no manual pose needed |
+| `laser_max_range` | 100 | 12 m | Reliable lidar range |
+| `update_min_d` / `update_min_a` | 0.25 m / 0.2 rad | 0.10 m / 0.10 rad | More frequent updates, smoother pose while following |
+
+**Path follower: CW1 proportional controller**, kept: rotate towards the next
+waypoint, drive when the heading error is below 0.35 rad, speed
+`min(0.25, 0.5 x distance)`, waypoint tolerance 0.15 m.
+
+CW2 additions:
+
+| Change | Why |
+|---|---|
+| Lidar safety stop: no forward motion if an obstacle is closer than 0.30 m within +/-35 deg ahead; slow down from 0.60 m | "Reaches the goal without collisions", also if localisation drifts or something is not on the map |
+| `/path_follower/status` (idle / following / blocked / reached) | Part 4 needs to know when a room is reached to send the next goal |
+| No `/cmd_vel` messages while idle (CW1 sent stop commands continuously) | Teleop and the follower would fight over the robot |
+| An empty path (planner failed) stops the robot | Otherwise it would keep following the old path |
+| TF listener on its own thread | Lookups inside callbacks could stall |
+
+**Test results** (simulation, map `my_map`, two runs of the same 3 goals in a
+row, starting at the spawn point. "True" positions from Gazebo, converted to
+the map frame: the robot spawns at world (-1, -2), which is the map origin.)
+
+| Goal | Reached | Time (run 1 / run 2) | Final true distance to goal | AMCL pose vs true pose* | Closest lidar range** | Safety stops |
+|---|---|---|---|---|---|---|
+| (-8, -8) | 2/2 | 63 s / 64 s | 0.066 m | 0.10 m | 0.27 m / 0.31 m | 0 |
+| (-8, 8) | 2/2 | 75 s / 77 s | 0.037 m | 0.17 m | 0.31 m / 0.26 m | 0 |
+| (3, -3) | 2/2 | 110 s / 109 s | 0.034 m | 0.11 m | 0.35 m / 0.34 m | 0 |
+
+\* Last `/amcl_pose` message. AMCL only publishes after moving 0.10 m or
+turning 0.10 rad, so this estimate is from slightly before the robot
+stopped and overstates the error. The follower uses the continuously
+updated `map` to `base_link` TF, which is why the robot ends 3 to 7 cm from
+the goal (tolerance 0.15 m).
+
+\*\* Closest obstacle seen by the lidar during the trip. The lidar is at the
+robot's centre and the robot's half-length is about 0.12 m, so 0.26 m is
+roughly 0.14 m between the robot body and the nearest obstacle: no
+collisions. Path clearance planned: 0.28 m (robot radius 0.18 + margin
+0.10).
+
+Success rate: 6/6 goals reached, 0 collisions, 0 safety stops.
+
+**To do**
+- [x] Results table for the report (above)
+- [ ] Screenshot: AMCL pose + path in RViz
 
 ## Part 4: Integration
 
@@ -169,6 +238,7 @@ robot's actual position.
 | `rosbot_controller` would not build | Needs `mecanum_drive_controller` from `husarion_controllers` | Added it to the build |
 | slam_toolbox default config would not work | Expects `base_footprint`, which the ROSbot does not have | `base_frame: base_link` |
 | 26% of PRM queries failed on the SLAM map | Thin free-space "fingers" from laser rays leaking into unexplored space; samples there could not connect | Unknown areas inflated by the robot radius, tiny unknown specks removed (change 3). 0/200 failures |
+| AMCL error looked like 10-17 cm while the robot stopped 3-7 cm from the goal | `/amcl_pose` is only published after 0.10 m / 0.10 rad of motion, so the last message is stale | Measure with the `map` to `base_link` TF (what the follower uses) and Gazebo's true pose |
 
 ## Not part of the submission
 

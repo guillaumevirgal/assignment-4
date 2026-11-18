@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ros-humble-slam-toolbox \
         ros-humble-nav2-map-server \
         ros-humble-nav2-lifecycle-manager \
+        ros-humble-nav2-amcl \
         ros-humble-teleop-twist-keyboard \
     && rm -rf /var/lib/apt/lists/*
 

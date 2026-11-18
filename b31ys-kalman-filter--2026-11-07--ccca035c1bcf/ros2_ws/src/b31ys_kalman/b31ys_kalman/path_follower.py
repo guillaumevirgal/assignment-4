@@ -1,13 +1,29 @@
 #!/usr/bin/env python3
+"""Path follower (CW1), used in CW2 Part 3 to follow the PRM path.
+
+Proportional controller: turn towards the next waypoint, drive when
+roughly aligned. The robot pose is map -> base_link, provided by AMCL
+(map -> odom) and the robot's odometry (odom -> base_link).
+
+CW2 additions (marked "CW2:"):
+* lidar safety stop: no forward motion if something is closer than
+  safety_distance in front; slow down below slow_distance.
+* /path_follower/status (std_msgs/String): following, reached, blocked,
+  idle. Used to send the next goal in Part 4.
+* does not publish on /cmd_vel while idle, so teleop still works.
+"""
 
 import math
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
+from rclpy.qos import (
+    QoSProfile, ReliabilityPolicy, DurabilityPolicy, qos_profile_sensor_data)
 
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Path
+from sensor_msgs.msg import LaserScan
+from std_msgs.msg import String
 
 from tf2_ros import Buffer, TransformListener, TransformException
 
@@ -70,14 +86,43 @@ class PathFollower(Node):
         )
 
         # -----------------------------------------------------
+        # CW2: status and lidar safety stop
+        # -----------------------------------------------------
+
+        self.declare_parameter('safety_distance', 0.30)
+        self.declare_parameter('slow_distance', 0.60)
+        self.declare_parameter('front_half_angle_deg', 35.0)
+        self.safety_distance = self.get_parameter('safety_distance').value
+        self.slow_distance = self.get_parameter('slow_distance').value
+        self.front_half_angle = math.radians(
+            self.get_parameter('front_half_angle_deg').value)
+
+        status_qos = QoSProfile(depth=1)
+        status_qos.reliability = ReliabilityPolicy.RELIABLE
+        status_qos.durability = DurabilityPolicy.TRANSIENT_LOCAL
+        self.status_pub = self.create_publisher(
+            String, '/path_follower/status', status_qos)
+        self.status = ''
+        self.set_status('idle')
+
+        self.create_subscription(
+            LaserScan, '/scan_filtered', self.scan_callback,
+            qos_profile_sensor_data)
+        self.front_distance = math.inf  # closest obstacle ahead (m)
+        self.laser_yaw = None           # laser frame yaw in base_link
+        self.idle_stop_sent = True
+
+        # -----------------------------------------------------
         # TF
         # -----------------------------------------------------
 
         self.tf_buffer = Buffer()
 
+        # CW2: own thread, so lookups never wait on the control loop
         self.tf_listener = TransformListener(
             self.tf_buffer,
-            self
+            self,
+            spin_thread=True
         )
 
         self.path = []
@@ -100,6 +145,39 @@ class PathFollower(Node):
         self.get_logger().info(
             f'Received path with {len(self.path)} points.'
         )
+
+        # CW2: an empty path (planner found nothing) means stop
+        if self.path:
+            self.idle_stop_sent = False
+            self.set_status('following')
+        else:
+            self.stop()
+            self.set_status('idle')
+
+    # CW2
+    def set_status(self, status):
+        if status != self.status:
+            self.status = status
+            self.status_pub.publish(String(data=status))
+
+    # CW2: closest obstacle in front of the robot, from the lidar
+    def scan_callback(self, msg):
+        if self.laser_yaw is None:
+            try:
+                tf = self.tf_buffer.lookup_transform(
+                    'base_link', msg.header.frame_id, rclpy.time.Time())
+                self.laser_yaw = self.yaw_from_quaternion(tf.transform.rotation)
+            except TransformException:
+                return
+        closest = math.inf
+        for i, r in enumerate(msg.ranges):
+            if not (msg.range_min < r < msg.range_max):
+                continue
+            angle = self.normalize_angle(
+                msg.angle_min + i * msg.angle_increment + self.laser_yaw)
+            if abs(angle) <= self.front_half_angle:
+                closest = min(closest, r)
+        self.front_distance = closest
 
     def normalize_angle(self, angle):
 
@@ -137,7 +215,10 @@ class PathFollower(Node):
     def control_loop(self):
 
         if not self.path:
-            self.stop()
+            # CW2: stop once, then stay quiet so teleop can drive
+            if not self.idle_stop_sent:
+                self.stop()
+                self.idle_stop_sent = True
             return
 
         if self.target_index >= len(self.path):
@@ -149,6 +230,7 @@ class PathFollower(Node):
             )
 
             self.path = []
+            self.set_status('reached')
 
             return
 
@@ -236,6 +318,24 @@ class PathFollower(Node):
 
         else:
             cmd.linear.x = 0.0
+
+        # -----------------------------------------------------
+        # CW2: lidar safety stop (turning on the spot is allowed)
+        # -----------------------------------------------------
+
+        if cmd.linear.x > 0.0:
+            if self.front_distance < self.safety_distance:
+                cmd.linear.x = 0.0
+                if self.status != 'blocked':
+                    self.get_logger().warning(
+                        f'Obstacle {self.front_distance:.2f} m ahead: stopped.')
+                self.set_status('blocked')
+            else:
+                if self.front_distance < self.slow_distance:
+                    cmd.linear.x *= (
+                        (self.front_distance - self.safety_distance)
+                        / (self.slow_distance - self.safety_distance))
+                self.set_status('following')
 
         self.cmd_pub.publish(
             cmd
