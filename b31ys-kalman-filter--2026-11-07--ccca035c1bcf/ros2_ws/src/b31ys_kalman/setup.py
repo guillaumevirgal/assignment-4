@@ -9,29 +9,16 @@ setup(
     packages=[package_name],
     data_files=[
         (
-            'share/' + package_name + '/students/bsc',
-            ['students/bsc/README.md']
-        ),
-
-        (
             'share/ament_index/resource_index/packages',
             ['resource/' + package_name]
         ),
         (
             'share/' + package_name,
-            ['package.xml', 'README.md']
+            ['package.xml']
         ),
         (
             'share/' + package_name + '/launch',
             glob('launch/*.launch.py')
-        ),
-        (
-            'share/' + package_name + '/students/beng',
-            ['students/beng/README.md']
-        ),
-        (
-            'share/' + package_name + '/students/msc',
-            ['students/msc/README.md']
         ),
     ],
     install_requires=['setuptools', 'numpy'],

@@ -1,0 +1,5 @@
+*
+!b31ys-kalman-filter--2026-11-07--ccca035c1bcf/ros2_ws/src
+!docker/entrypoint.sh
+**/.git
+**/__pycache__

@@ -1,0 +1,25 @@
+# Usage (from the CW2/docker folder):
+#   xhost +local:docker          # allow GUI windows (RViz, Gazebo)
+#   docker compose up -d --build # build image and start the container
+#   docker compose exec ros bash # open a shell (repeat for each terminal)
+#   docker compose down          # stop
+
+services:
+  ros:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: b31ys-cw2:humble
+    container_name: b31ys-cw2
+    command: sleep infinity
+    network_mode: host
+    ipc: host
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+      - QT_X11_NO_MITSHM=1
+      - ROS_DOMAIN_ID=0
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ./output:/output
+    devices:
+      - /dev/dri:/dev/dri
