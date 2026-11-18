@@ -50,10 +50,32 @@ ign gazebo -g
 # Plot the results (writes kalman_plot.pdf and kalman_data.csv to /output)
 python3 /ros2_ws/src/b31ys_kalman/scripts/plot_trajectories.py
 
-# Optional: mapping
-ros2 launch slam_toolbox online_async_launch.py use_sim_time:=true
-ros2 run nav2_map_server map_saver_cli -f /output/husarion_world_map
 ```
+
+## Building a map (slam_toolbox + keyboard teleop)
+
+One command, in one container shell. Don't run the Kalman launch files at
+the same time: `student_trajectory` also drives the robot.
+
+```bash
+ros2 run b31ys_kalman build_map.sh                          # map name: husarion_world_map
+ros2 run b31ys_kalman build_map.sh my_map gz_headless_mode:=False   # also show Gazebo
+```
+
+It starts the simulation, slam_toolbox and RViz (showing the map as it
+grows), then hands you the keyboard teleop in that terminal:
+
+- `i` forward, `,` backward, `j` / `l` turn, `k` stop
+- Drive slowly around the whole environment, and come back to the start
+  at the end so slam_toolbox can close the loop.
+- Press **Ctrl+C** when the map looks complete. The script saves it with
+  the Nav2 map saver to `docker/output/<name>.pgm` and `.yaml`, then
+  shuts everything down.
+
+Files involved (in `b31ys_kalman`): `scripts/build_map.sh`,
+`launch/mapping.launch.py`, `config/slam_params.yaml` (slam_toolbox
+defaults with `base_frame: base_link` and `scan_topic: /scan_filtered`)
+and `config/mapping.rviz`.
 
 Stop with `docker compose down`.
 

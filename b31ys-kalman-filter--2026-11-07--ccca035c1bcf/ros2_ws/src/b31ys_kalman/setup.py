@@ -20,6 +20,15 @@ setup(
             'share/' + package_name + '/launch',
             glob('launch/*.launch.py')
         ),
+        (
+            'share/' + package_name + '/config',
+            glob('config/*.yaml') + glob('config/*.rviz')
+        ),
+        (
+            # lets you run: ros2 run b31ys_kalman build_map.sh
+            'lib/' + package_name,
+            ['scripts/build_map.sh']
+        ),
     ],
     install_requires=['setuptools', 'numpy'],
     zip_safe=True,
