@@ -1,0 +1,16 @@
+# Patient rooms for the hospital delivery demo (Part 4).
+# Coordinates are in the map frame (metres) of maps/my_map.yaml.
+# The nurse station is where the robot starts (map origin).
+goal_sequencer:
+  ros__parameters:
+    # Order of the visit. Any names from the list below, repeats allowed.
+    sequence: [room_1, room_2, room_3, nurse_station]
+
+    # Known places: same position in the three lists = one place (name, x, y)
+    place_names: [nurse_station, room_1, room_2, room_3, room_4]
+    place_x: [0.0, -8.0, -8.0, 8.0, 8.0]
+    place_y: [0.0, -8.0, 8.0, 8.0, -8.0]
+
+    wait_at_room: 3.0       # s spent "delivering medicine" at each room
+    goal_timeout: 300.0     # s before a goal is given up
+    start_delay: 5.0        # s after the system is ready, before the first goal

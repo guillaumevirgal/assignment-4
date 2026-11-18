@@ -86,6 +86,17 @@ Visualization Manager:
         Orientation:
           Value: true
       Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Patient rooms
+      Enabled: true
+      Namespaces: {}
+      Topic:
+        Value: /rooms
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+      Value: true
     - Class: rviz_default_plugins/RobotModel
       Name: RobotModel
       Enabled: true

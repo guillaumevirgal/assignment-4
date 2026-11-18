@@ -12,7 +12,7 @@ does all of it in one go.
 """
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, GroupAction
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
@@ -28,24 +28,23 @@ def generate_launch_description():
     gz_headless_mode = LaunchConfiguration('gz_headless_mode')
     slam_params_file = LaunchConfiguration('slam_params_file')
 
-    # Scoped group: arguments passed to the simulation launch (e.g. its own
-    # rviz:=false) must not leak into this file and switch off our RViz.
-    simulation = GroupAction(
-        scoped=True,
+    # Husarion's simulation launch is given rviz:=false. In ROS 2 Humble,
+    # arguments of an included launch file leak into this file, so our
+    # RViz is listed BEFORE the simulation (its rviz condition is
+    # evaluated before the leak).
+    simulation = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution([
+                FindPackageShare('rosbot_gazebo'),
+                'launch', 'simulation.launch.py'
+            ])
+        ),
+        launch_arguments={
+            'robot_model': 'rosbot',
+            'rviz': 'false',
+            'gz_headless_mode': gz_headless_mode,
+        }.items(),
         condition=IfCondition(sim),
-        actions=[IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(
-                    PathJoinSubstitution([
-                        FindPackageShare('rosbot_gazebo'),
-                        'launch', 'simulation.launch.py'
-                    ])
-                ),
-                launch_arguments={
-                    'robot_model': 'rosbot',
-                    'rviz': 'false',
-                    'gz_headless_mode': gz_headless_mode,
-                }.items()
-            )],
     )
 
     slam = Node(
@@ -82,7 +81,7 @@ def generate_launch_description():
             default_value=PathJoinSubstitution(
                 [pkg_share, 'config', 'slam_params.yaml']),
             description='slam_toolbox parameter file.'),
+        rviz_node,
         simulation,
         slam,
-        rviz_node,
     ])

@@ -356,7 +356,8 @@ def main(args=None):
 
     finally:
 
-        node.stop()
+        if rclpy.ok():  # CW2: context may already be shut down
+            node.stop()
         node.destroy_node()
 
         if rclpy.ok():

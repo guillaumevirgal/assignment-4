@@ -15,7 +15,7 @@ How to run everything in Docker: `docker/README.md`.
 | 1. SLAM: does the map represent the environment well? | 15% | **Done**: `maps/my_map` built with teleop, complete and clean |
 | 2. PRM on the SLAM map: finds a solution, is PRM, keeps a safe distance | 25% | **Done and tested** on `my_map`, in simulation. Report figures/table to do |
 | 3. Localisation and path following: reaches goals without collisions | 25% | **Done and tested**: 6/6 goals reached, no collisions. Screenshot to do |
-| 4. Integration and code quality: runs from one launch file, documented | 15% | Not started |
+| 4. Integration and code quality: runs from one launch file, documented | 15% | `launch/hospital.launch.py` + `goal_sequencer` (rooms in `config/rooms.yaml`). Full tour test and video to do |
 | Report (max 4 pages PDF) | 20% | Not started. Material collected below |
 
 ## Deliverables checklist
@@ -238,7 +238,9 @@ Success rate: 6/6 goals reached, 0 collisions, 0 safety stops.
 | `rosbot_controller` would not build | Needs `mecanum_drive_controller` from `husarion_controllers` | Added it to the build |
 | slam_toolbox default config would not work | Expects `base_footprint`, which the ROSbot does not have | `base_frame: base_link` |
 | 26% of PRM queries failed on the SLAM map | Thin free-space "fingers" from laser rays leaking into unexplored space; samples there could not connect | Unknown areas inflated by the robot radius, tiny unknown specks removed (change 3). 0/200 failures |
-| RViz did not open when launching with `sim:=true` | Arguments passed to an included launch file leak into the parent in ROS 2 Humble: the `rviz:=false` given to Husarion's simulation launch also switched off our RViz | Simulation include wrapped in a scoped `GroupAction` |
+| RViz did not open when launching with `sim:=true` | Arguments passed to an included launch file leak into the parent in ROS 2 Humble: the `rviz:=false` given to Husarion's simulation launch also switched off our RViz | RViz listed before the simulation in the launch files, so its condition is evaluated before the leak. (A scoped `GroupAction` was tried first: it broke Husarion's launch, `launch configuration 'mecanum' does not exist`) |
+| Robot jumped in RViz, "Detected jump back in time" | A second simulation was started in another container; Gazebo's transport is not separated by `ROS_DOMAIN_ID`, so its clock reached the first one | Run one simulation at a time, or give each container its own `IGN_PARTITION` |
+| Gazebo window: simulation shut down at start (`Could not contact service /controller_manager/list_controllers`) | Gazebo GUI fails to create its graphics context in Docker (`egl: failed to create dri2 screen`) and starts too slowly | Run Gazebo headless (`gz_headless_mode:=True`), watch in RViz |
 | AMCL error looked like 10-17 cm while the robot stopped 3-7 cm from the goal | `/amcl_pose` is only published after 0.10 m / 0.10 rad of motion, so the last message is stale | Measure with the `map` to `base_link` TF (what the follower uses) and Gazebo's true pose |
 
 ## Not part of the submission

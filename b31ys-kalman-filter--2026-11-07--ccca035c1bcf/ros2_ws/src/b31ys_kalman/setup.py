@@ -49,6 +49,7 @@ setup(
             'b31ys_kalman.kalman_filter_template:main',
             'prm_planner = b31ys_kalman.prm_planner:main',
             'path_follower = b31ys_kalman.path_follower:main',
+            'goal_sequencer = b31ys_kalman.goal_sequencer:main',
         ],
     },
 )
