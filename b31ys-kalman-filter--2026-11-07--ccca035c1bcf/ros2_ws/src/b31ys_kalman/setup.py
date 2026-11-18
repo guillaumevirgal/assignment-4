@@ -25,6 +25,11 @@ setup(
             glob('config/*.yaml') + glob('config/*.rviz')
         ),
         (
+            # saved SLAM maps (.yaml + .pgm)
+            'share/' + package_name + '/maps',
+            glob('maps/*.yaml') + glob('maps/*.pgm')
+        ),
+        (
             # lets you run: ros2 run b31ys_kalman build_map.sh
             'lib/' + package_name,
             ['scripts/build_map.sh']
@@ -42,6 +47,8 @@ setup(
             'student_trajectory = b31ys_kalman.student_trajectory:main',
             'kalman_filter_template = '
             'b31ys_kalman.kalman_filter_template:main',
+            'prm_planner = b31ys_kalman.prm_planner:main',
+            'path_follower = b31ys_kalman.path_follower:main',
         ],
     },
 )
