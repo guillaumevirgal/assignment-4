@@ -12,7 +12,7 @@ does all of it in one go.
 """
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, GroupAction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
@@ -28,19 +28,24 @@ def generate_launch_description():
     gz_headless_mode = LaunchConfiguration('gz_headless_mode')
     slam_params_file = LaunchConfiguration('slam_params_file')
 
-    simulation = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            PathJoinSubstitution([
-                FindPackageShare('rosbot_gazebo'),
-                'launch', 'simulation.launch.py'
-            ])
-        ),
-        launch_arguments={
-            'robot_model': 'rosbot',
-            'rviz': 'false',
-            'gz_headless_mode': gz_headless_mode,
-        }.items(),
+    # Scoped group: arguments passed to the simulation launch (e.g. its own
+    # rviz:=false) must not leak into this file and switch off our RViz.
+    simulation = GroupAction(
+        scoped=True,
         condition=IfCondition(sim),
+        actions=[IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    PathJoinSubstitution([
+                        FindPackageShare('rosbot_gazebo'),
+                        'launch', 'simulation.launch.py'
+                    ])
+                ),
+                launch_arguments={
+                    'robot_model': 'rosbot',
+                    'rviz': 'false',
+                    'gz_headless_mode': gz_headless_mode,
+                }.items()
+            )],
     )
 
     slam = Node(
@@ -55,7 +60,7 @@ def generate_launch_description():
         package='rviz2',
         executable='rviz2',
         name='rviz2_mapping',
-        output='log',
+        output='screen',
         arguments=['-d', PathJoinSubstitution(
             [pkg_share, 'config', 'mapping.rviz'])],
         parameters=[{'use_sim_time': True}],

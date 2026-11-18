@@ -17,7 +17,7 @@ slam_toolbox localisation provides map -> odom.
 """
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, GroupAction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
@@ -56,15 +56,20 @@ def generate_launch_description():
                               description='Append planning statistics to this CSV.'),
     ]
 
-    simulation = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(PathJoinSubstitution(
-            [FindPackageShare('rosbot_gazebo'), 'launch', 'simulation.launch.py'])),
-        launch_arguments={
-            'robot_model': 'rosbot',
-            'rviz': 'false',
-            'gz_headless_mode': cfg('gz_headless_mode'),
-        }.items(),
+    # Scoped group: arguments passed to the simulation launch (e.g. its own
+    # rviz:=false) must not leak into this file and switch off our RViz.
+    simulation = GroupAction(
+        scoped=True,
         condition=IfCondition(cfg('sim')),
+        actions=[IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(PathJoinSubstitution(
+                    [FindPackageShare('rosbot_gazebo'), 'launch', 'simulation.launch.py'])),
+                launch_arguments={
+                    'robot_model': 'rosbot',
+                    'rviz': 'false',
+                    'gz_headless_mode': cfg('gz_headless_mode'),
+                }.items()
+            )],
     )
 
     map_server = Node(
@@ -123,7 +128,7 @@ def generate_launch_description():
         package='rviz2',
         executable='rviz2',
         name='rviz2_prm',
-        output='log',
+        output='screen',
         arguments=['-d', PathJoinSubstitution([pkg_share, 'config', 'prm.rviz'])],
         parameters=[{'use_sim_time': True}],
         condition=IfCondition(cfg('rviz')),

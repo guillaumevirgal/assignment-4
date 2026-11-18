@@ -83,5 +83,12 @@ Stop with `docker compose down`.
 
 - Anything saved in `/output` inside the container appears in `docker/output/` on
   your machine (CSV files, plots, saved maps). The shell starts in `/output`.
-- The code is copied into the image at build time. After editing code, run
-  `docker compose build` again, then `docker compose up -d`.
+- The code is copied into the image at build time. After any code change
+  (or a `git pull`), rebuild the image AND recreate the container, otherwise
+  the running container keeps the old code:
+
+  ```bash
+  docker compose build
+  docker compose up -d --force-recreate
+  docker compose exec ros bash
+  ```
